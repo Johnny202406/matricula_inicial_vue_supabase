@@ -5,6 +5,8 @@ import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
+import path from 'node:path'
+import tsconfigPaths from 'vite-tsconfig-paths'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -13,11 +15,20 @@ export default defineConfig({
     vueJsx(),
     vueDevTools(),
     tailwindcss(),
-
+    tsconfigPaths()
   ],
+  optimizeDeps:{
+    include:['tslib']
+  },
+  build:{
+    rollupOptions:{
+      external:['tslib']
+    }
+  },
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // '@':path.resolve(__dirname,'./src')
     },
   },
 })

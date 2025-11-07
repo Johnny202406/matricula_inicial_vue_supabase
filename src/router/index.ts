@@ -5,6 +5,7 @@ import Estudiante from '@/views/estudiante.vue'
 import Docente from '@/views/docente.vue'
 import Aula from '@/views/aula.vue'
 import Matricula from '@/views/matricula.vue'
+import Login from '@/views/login.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -43,6 +44,11 @@ const router = createRouter({
       path: '/matricula',
       name: 'matricula',
       component: Matricula,
+    }
+    , {
+      path: '/login',
+      name: 'login',
+      component: Login,
     },
   ],
 })

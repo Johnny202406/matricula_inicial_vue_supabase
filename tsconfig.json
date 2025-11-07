@@ -12,6 +12,10 @@
     }
   ],
   "compilerOptions": {
-    "module": "NodeNext"
+    "module": "NodeNext",
+     "baseUrl": "./", // Hace que las rutas relativas a partir de la raíz del proyecto se resuelvan desde la raíz
+    "paths": {
+      "@/*": ["src/*"] // Esto permite importar desde la carpeta src usando un alias
+    }
   }
 }
