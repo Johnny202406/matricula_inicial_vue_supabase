@@ -29,6 +29,8 @@
     "@vueuse/core": "^14.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
     "lucide-vue-next": "^0.552.0",
     "pinia": "^3.0.3",
     "reka-ui": "^2.6.0",

@@ -17,12 +17,13 @@
         </div>
       </div>
       <button
-        class="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-purple-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 shadow-lg shadow-purple-500/50 dark:shadow-lg dark:shadow-purple-800/80 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2 disabled:bg-gray-400" style="width:100px"
-        @click="getApoderados()" :disabled="disabled">Buscar</button>
+        class="text-white bg-gradient-to-r from-purple-500 via-purple-600 to-purple-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-purple-300 dark:focus:ring-purple-800 shadow-lg shadow-purple-500/50 dark:shadow-lg dark:shadow-purple-800/80 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2 disabled:bg-gray-400"
+        style="width:100px" @click="getApoderados()" :disabled="disabled">Buscar</button>
       <div class="row mx-3">
 
-        <button class="btn" @click="crearApoderados(1)" :disabled="disabled">CREAR 1 APODERADO</button>
-        <button class="btn" @click="crearApoderados(5)" :disabled="disabled">CREAR 5 APODERADOS</button>
+        <button class="btn" @click="crearApod()" :disabled="disabled">CREAR APODERADO</button>
+        <!-- <button class="btn" @click="crearApoderados(1)" :disabled="disabled">CREAR 1 APODERADO</button>
+        <button class="btn" @click="crearApoderados(5)" :disabled="disabled">CREAR 5 APODERADOS</button> -->
       </div>
     </div>
 
@@ -90,7 +91,7 @@
         </div>
         <div class="grid md:grid-cols-2 md:gap-6" style="margin-bottom:10px">
           <div class="relative z-0 w-full mb-5 group">
-            <input type="text" name="floating_phone" id="floating_phone" v-model="form.numero"
+            <input type="number" name="floating_phone" id="floating_phone" v-model="form.numero"
               class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-blue-500 focus:outline-none focus:ring-0 focus:border-blue-600 peer"
               placeholder=" " required />
             <label for="floating_phone"
@@ -98,7 +99,7 @@
               (987654321)</label>
           </div>
           <div class="relative z-0 w-full mb-5 group">
-            <input type="text" name="floating_company" id="floating_company" v-model="form.dni"
+            <input type="number" name="floating_company" id="floating_company" v-model="form.dni"
               class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-blue-500 focus:outline-none focus:ring-0 focus:border-blue-600 peer"
               placeholder=" " required />
             <label for="floating_company"
@@ -130,10 +131,10 @@ export interface Apoderado {
 }
 
 const form = reactive({
-  nombre: '',
-  apellido: '',
-  numero: '',
-  dni: '',
+  nombre: null as null | string,
+  apellido: null as null | string,
+  numero: null as null | number,
+  dni: null as null | number,
 })
 
 const searchByName = ref<string>('')
@@ -174,6 +175,7 @@ const getApoderados = async () => {
   })()
 
 const crearApoderados = async (number: number) => {
+
   const start = performance.now()
   message.value = `Creando ${number} apoderados..., espere`
   disabled.value = true
@@ -206,12 +208,15 @@ const editarApoderado = async (apoderado: Apoderado) => {
   selectedApoderado.value = apoderado
   form.nombre = apoderado.nombre
   form.apellido = apoderado.apellido
-  form.numero = apoderado.numero
-  form.dni = apoderado.dni
+  form.numero = Number(apoderado.numero)
+  form.dni = Number(apoderado.dni)
   isVisibleModal.value = true
 
 }
 const actualizarEnSupa = async () => {
+  if (!selectedApoderado.value) {
+    return crearApoderadoSupabase()
+  }
   const start = performance.now()
   disabled.value = true
   const { nombre, apellido, numero, dni } = form
@@ -222,8 +227,8 @@ const actualizarEnSupa = async () => {
     .update({
       nombre,
       apellido,
-      numero,
-      dni
+      numero: (numero as number).toString(),
+      dni: (dni as number).toString(),
     })
     .eq('id', selectedApoderado.value?.id as number)
     .select('id')
@@ -266,9 +271,48 @@ const eliminarApoderado = async (id: number) => {
   return
 }
 
+
+
+// Cerrar modal
 const cerrarModal = () => {
-  isVisibleModal.value = false
+  isVisibleModal.value = false;
+  selectedApoderado.value = undefined
+};
+
+const crearApod = () => {
+  selectedApoderado.value = undefined
+  form.nombre = null;
+  form.apellido = null;
+  form.numero = null;
+  form.dni = null;
+  isVisibleModal.value = true;
 }
+const crearApoderadoSupabase = async () => {
+  const { nombre, apellido, dni, numero } = form;
+
+  // Insertar la matrícula en la base de datos
+  const { data, error } = await supabase
+    .from('apoderado')
+    .insert([{
+      nombre,
+      apellido,
+      dni: dni?.toString(),
+      numero: numero?.toString(),
+    }])
+    .select('id');
+
+  // Cerrar modal y manejar errores
+  cerrarModal();
+  if (error) {
+    console.error('Error al crear apoderado:', error);
+    message.value = 'Hubo un error al crear la apoderado.';
+    return;
+  }
+
+  // Recargar las matrículas
+  await getApoderados();
+  message.value = 'Apoderado creada correctamente';
+};
 </script>
 <style  >
 @import "tailwindcss";

@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { ref, reactive } from "vue";
 import { supabase } from '@/lib/supabaseClient';
-import { Delete, Pencil, Plus, PlusCircle, X } from "lucide-vue-next";
+import { Delete, Download, Pencil, Plus, PlusCircle, X } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { faker } from "@faker-js/faker";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-
-
+import { jsPDF } from "jspdf";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 // Definir los tipos de datos
 interface Apoderado {
   id: number;
@@ -23,6 +31,31 @@ interface Estudiante {
   id_apoderado: number | null;
   apoderado: Apoderado | null; // Relación con apoderado
 }
+interface Aula {
+  id: number;
+  nombre: string;
+  edad: number;
+  id_docente: number | null;
+}
+
+interface Estudiante {
+  id: number;
+  dni: string;
+  nombre: string;
+  apellido: string;
+  id_apoderado: number | null;
+  apoderado: Apoderado | null;
+}
+
+interface Matricula {
+  id: number;
+  id_aula: number;
+  aula:Aula,
+  id_estudiante: number;
+  estudiante:Estudiante;
+  fecha: string; // Puedes ajustar el tipo dependiendo de cómo quieras manejar la fecha
+  precio: number;
+}
 
 // Estado reactivo
 const estudiantes = ref<Estudiante[]>([]);
@@ -32,24 +65,23 @@ const isVisibleModal = ref(false);
 const message = ref<string>('Empieza creando estudiantes o eliminarlos');
 const disabled = ref<boolean>(false);
 const form = reactive({
-  nombre: '',
-  apellido: '',
-  numero: '',
-  dni: '',
+  nombre: null as null|string,
+  apellido: null as null|string,
+  dni: null as null|number,
+  apoderado: null as null|number
 });
-const apoderados = ref<any[]>([]);
+const apoderados = ref<Apoderado[]>([]);
 const selectedEstudiante = ref<Estudiante | null>(null);
 
 const getApoderados = async () => {
-  const { data, error } = await supabase.from('apoderado').select('id');
+  const { data, error } = await supabase.from('apoderado').select('*');
   if (error) {
     console.error('Error al obtener apoderados:', error);
     return;
   }
-  apoderados.value = data ?? [];
+  apoderados.value = data as Apoderado[] ?? [];
 };
 
-getApoderados()
 // Función para crear estudiantes con apoderados aleatorios
 const crearEstudiantes = async (number: number) => {
   // Asegúrate de que haya apoderados antes de continuar
@@ -68,7 +100,7 @@ const crearEstudiantes = async (number: number) => {
       dni: faker.string.numeric(8),
       nombre: faker.person.firstName(),
       apellido: faker.person.lastName(),
-      id_apoderado: randomApoderado.id, // Relacionamos el apoderado al estudiante
+      id_apoderado: (randomApoderado as Apoderado).id, // Relacionamos el apoderado al estudiante
     });
   }
 
@@ -138,21 +170,24 @@ const editarEstudiante = async (estudiante: Estudiante) => {
   selectedEstudiante.value = estudiante;
   form.nombre = estudiante.nombre;
   form.apellido = estudiante.apellido;
-  form.dni = estudiante.dni;
-  form.numero = estudiante.apoderado?.dni || '';
+  form.dni = Number(estudiante.dni);
+  form.apoderado =( estudiante.apoderado as Apoderado).id;
   isVisibleModal.value = true;
 };
 
 // Función para actualizar un estudiante
 const actualizarEstudiante = async () => {
+    if (!selectedEstudiante.value) {
+    return crearEstudianteSupabase()
+  }
   const start = performance.now();
   disabled.value = true;
 
-  const { nombre, apellido, numero, dni } = form;
+  const { nombre, apellido, dni,apoderado } = form;
 
   const { data, error } = await supabase
     .from('estudiante')
-    .update({ nombre, apellido, numero, dni })
+    .update({ nombre, apellido, dni:(dni as number).toString() ,id_apoderado: Number(apoderado)})
     .eq('id', selectedEstudiante.value?.id as number)
     .select('id');
 
@@ -170,15 +205,98 @@ const actualizarEstudiante = async () => {
   disabled.value = false;
 };
 
-// Cerrar modal
-const cerrarModal = () => {
-  isVisibleModal.value = false;
+
+
+const descargarMatricula = async (idEstudiante: number) => {
+  // Verificar si el estudiante tiene alguna matrícula
+  const { data: matriculas, error } = await supabase
+    .from('matricula')
+    .select(`
+      id, fecha,
+      aula (nombre),
+      estudiante (nombre),
+      precio
+    `)
+    .eq('id_estudiante', idEstudiante)
+    .order('fecha', { ascending: false }) // Traemos la más reciente
+    .limit(1); // Solo la última matrícula
+
+  if (error || !matriculas.length) {
+    message.value='No se encontraron matrículas para este estudiante.';
+    return;
+  }
+
+  // Obtener la última matrícula
+  const matricula = matriculas[0];
+
+  // Crear un nuevo documento PDF
+  const doc = new jsPDF();
+
+  // Título
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text(`Matrícula del Estudiante: ${idEstudiante}`, 20, 20);
+
+  // Información de la matrícula
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(12);
+  doc.text(`Nombre: ${(matricula as Matricula).estudiante.nombre}`,20,30);
+  doc.text(`Aula: ${(matricula as Matricula).aula.nombre}`, 20, 40);
+  doc.text(`Fecha de Matrícula: ${new Date((matricula as Matricula).fecha).toLocaleDateString()}`, 20, 50);
+  doc.text(`Precio: PEN${(matricula as Matricula).precio} `, 20, 60);
+
+  // Descargar el archivo PDF
+  doc.save(`matricula_${idEstudiante}.pdf`);
+
 };
 
 // Inicializar datos de estudiantes al cargar el componente
-;(async () => {
-  await getEstudiantes();
+(async () => {
+   getEstudiantes();
+getApoderados()
+
 })();
+// Cerrar modal
+const cerrarModal = () => {
+  isVisibleModal.value = false;
+  selectedEstudiante.value=null
+};
+
+const crearEstudiante=()=>{
+  selectedEstudiante.value=null
+  form.nombre = null;
+  form.apellido = null;
+  form.dni = null;
+  form.apoderado = null;
+
+  isVisibleModal.value = true;
+}
+const crearEstudianteSupabase = async () => {
+  const { nombre, apellido, dni,apoderado } = form;
+  // Insertar la matrícula en la base de datos
+  const { data, error } = await supabase
+    .from('estudiante')
+    .insert([{
+      nombre,
+      apellido,
+      dni:(dni as number).toString(),
+      id_apoderado:apoderado
+
+    }])
+    .select('id');
+
+  // Cerrar modal y manejar errores
+  cerrarModal();
+  if (error) {
+    console.error('Error al crear Estudiante:', error);
+    message.value = 'Hubo un error al crear la Estudiante.';
+    return;
+  }
+
+  // Recargar las matrículas
+  await getEstudiantes();
+  message.value = 'Estudiante creada correctamente';
+};
 </script>
 <template>
   <div class="relative">
@@ -207,14 +325,20 @@ const cerrarModal = () => {
           class="hover:text-black w-36 bg-black border-(-cgv) border-0 text-(--cgv)">
           <Plus class="w-4 h-4 mr-2" />Buscar
         </Button>
-        <Button @click="crearEstudiantes(1)" :disabled="disabled" :variant="'outline'"
+
+        <Button @click="crearEstudiante()" :disabled="disabled" :variant="'outline'"
+          class="hover:text-black w-36 bg-(--cgv) border-(--cgv) border-0 text-white">
+          <Plus class="w-4 h-4 mr-2" />Crear 1 estudiante
+        </Button>
+
+        <!-- <Button @click="crearEstudiantes(1)" :disabled="disabled" :variant="'outline'"
           class="hover:text-black w-36 bg-(--cgv) border-(--cgv) border-0 text-white">
           <Plus class="w-4 h-4 mr-2" />Crear 1 estudiante
         </Button>
         <Button @click="crearEstudiantes(5)" :disabled="disabled" :variant="'outline'"
           class="hover:text-black w-36 bg-(--cgv) border-(--cgv) border-0 text-white">
           <PlusCircle class="w-4 h-4 mr-2" />Crear 5 estudiantes
-        </Button>
+        </Button> -->
       </div>
     </div>
 
@@ -250,6 +374,11 @@ const cerrarModal = () => {
                 class="hover:text-black w-auto bg-(--cgv) border-(--cgv) border-0 text-white">
                 <Pencil class="w-4 h-4 mr-2" />
               </Button>
+              <!-- Descargar matricula -->
+              <Button @click="descargarMatricula(estudiante.id)" :disabled="disabled" :variant="'outline'"
+                class="hover:text-black w-auto bg-(--cgv) border-(--cgv) border-0 text-white">
+                <Download class="w-4 h-4 mr-2" />
+              </Button>
             </div>
           </TableCell>
         </TableRow>
@@ -280,20 +409,9 @@ const cerrarModal = () => {
             </label>
           </div>
         </div>
-
         <div class="grid md:grid-cols-2 md:gap-6" style="margin-bottom:10px;">
           <div class="relative z-0 w-full mb-5 group">
-            <input type="text" v-model="form.numero"
-              class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-(--cgv) focus:outline-none focus:ring-0 focus:border-(--cgv) peer"
-              required />
-            <label for="numero"
-              class="peer-focus:font-medium absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-6 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 rtl:peer-focus:translate-x-1/4 peer-focus:text-(--cgv) peer-focus:dark:text-(--cgv) peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-6">
-              Número (987654321)
-            </label>
-          </div>
-
-          <div class="relative z-0 w-full mb-5 group">
-            <input type="text" v-model="form.dni"
+            <input type="number" v-model="form.dni"
               class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-(--cgv) focus:outline-none focus:ring-0 focus:border-(--cgv) peer"
               required />
             <label for="dni"
@@ -301,9 +419,24 @@ const cerrarModal = () => {
               DNI
             </label>
           </div>
+          <div class="grid md:grid-cols-2 md:gap-6" style="margin-bottom:10px;">
+          <Select v-model="form.apoderado">
+            <SelectTrigger>
+              <SelectValue placeholder="Selecciona un apoderado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Apoderado</SelectLabel>
+                <SelectItem v-for="apoderado in apoderados" :key="apoderado.id" :value="apoderado.id">
+                  {{ apoderado.nombre }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          </div>
         </div>
 
-        <div class="flex justify-end">
+        <div class="flex justify-end gap-2">
           <Button type="button" @click="cerrarModal" class="hover:text-black bg-red-600 text-white border-0">Cerrar</Button>
           <Button type="submit" :disabled="disabled" class="ml-2 hover:text-black bg-(--cgv) text-white border-0">Guardar cambios</Button>
         </div>

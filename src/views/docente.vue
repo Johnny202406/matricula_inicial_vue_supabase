@@ -72,10 +72,10 @@ export interface Docente {
 }
 
 const form = reactive({
-  nombre: '',
-  apellido: '',
-  numero: '',
-  dni: '',
+  nombre: null as null | string,
+  apellido: null as null | string,
+  numero: null as null | number,
+  dni: null as null | number,
 })
 
 const searchByName = ref<string>('')
@@ -152,12 +152,15 @@ const editardocente = async (docente: Docente) => {
   selectedDocente.value = docente
   form.nombre = docente.nombre
   form.apellido = docente.apellido
-  form.numero = docente.numero
-  form.dni = docente.dni
+  form.numero = Number(docente.numero)
+  form.dni = Number(docente.dni)
   isVisibleModal.value = true
 
 }
 const actualizarEnSupa = async () => {
+   if (!selectedDocente.value) {
+    return crearDocenteSupabase()
+  }
   const start = performance.now()
   disabled.value = true
   const { nombre, apellido, numero, dni } = form
@@ -168,8 +171,8 @@ const actualizarEnSupa = async () => {
     .update({
       nombre,
       apellido,
-      numero,
-      dni
+      numero:(numero as number).toString(),
+      dni:(numero as number).toString()
     })
     .eq('id', selectedDocente.value?.id as number)
     .select('id')
@@ -212,14 +215,52 @@ const eliminardocente = async (id: number) => {
   return
 }
 
+
+// Cerrar modal
 const cerrarModal = () => {
-  isVisibleModal.value = false
+  isVisibleModal.value = false;
+  selectedDocente.value = undefined
+};
+
+const crearDocente= () => {
+  selectedDocente.value = undefined
+  form.nombre = null;
+  form.apellido = null;
+  form.numero = null;
+  form.dni = null;
+  isVisibleModal.value = true;
 }
+const crearDocenteSupabase = async () => {
+  const { nombre, apellido, dni, numero } = form;
+
+  // Insertar la matrícula en la base de datos
+  const { data, error } = await supabase
+    .from('docente')
+    .insert([{
+      nombre,
+      apellido,
+      dni: dni?.toString(),
+      numero: numero?.toString(),
+    }])
+    .select('id');
+
+  // Cerrar modal y manejar errores
+  cerrarModal();
+  if (error) {
+    console.error('Error al crear Docente:', error);
+    message.value = 'Hubo un error al crear la Docente.';
+    return;
+  }
+
+  // Recargar las matrículas
+  await getDocentes();
+  message.value = 'Docente creada correctamente';
+};
 </script>
 
 <template>
   <div class="relative">
-    <h1>APODERADOS</h1>
+    <h1>DOCENTES</h1>
     <div class="box">
       <RouterLink to="/">Ir al dashboard</RouterLink>
       <span class="bg-(--cgv) p-2 rounded-sm text-white">{{ message }}</span>
@@ -241,14 +282,18 @@ const cerrarModal = () => {
         <Plus class="w-4 h-4 mr-2" />Buscar
       </Button>
       <div class="flex gap-2 pb-2">
-        <Button @click="crearDocentes(1)" :disabled="disabled" :variant="'outline'"
+          <Button @click="crearDocente()" :disabled="disabled" :variant="'outline'"
+          class="hover:text-black w-36 bg-(--cgv) border-(--cgv) border-0 text-white">
+          <Plus class="w-4 h-4 mr-2" />Crear Docente
+        </Button>
+        <!-- <Button @click="crearDocentes(1)" :disabled="disabled" :variant="'outline'"
           class="hover:text-black w-36 bg-(--cgv) border-(--cgv) border-0 text-white">
           <Plus class="w-4 h-4 mr-2" />Crear 1 docente
         </Button>
         <Button @click="crearDocentes(5)" :disabled="disabled" :variant="'outline'"
           class="hover:text-black w-36 bg-(--cgv) border-(--cgv) border-0 text-white">
           <PlusCircle class="w-4 h-4 mr-2" />Crear 5 docente
-        </Button>
+        </Button> -->
       </div>
 
 
@@ -354,7 +399,7 @@ const cerrarModal = () => {
         </div>
         <div class="grid md:grid-cols-2 md:gap-6" style="margin-bottom:10px">
           <div class="relative z-0 w-full mb-5 group">
-            <input type="text" name="floating_phone" id="floating_phone" v-model="form.numero"
+            <input type="number" name="floating_phone" id="floating_phone" v-model="form.numero"
               class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-(--cgv) focus:outline-none focus:ring-0 focus:border-(--cgv)peer"
               placeholder=" " required />
             <label for="floating_phone"
@@ -362,7 +407,7 @@ const cerrarModal = () => {
               (987654321)</label>
           </div>
           <div class="relative z-0 w-full mb-5 group">
-            <input type="text" name="floating_company" id="floating_company" v-model="form.dni"
+            <input type="number" name="floating_company" id="floating_company" v-model="form.dni"
               class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-(--cgv) focus:outline-none focus:ring-0 focus:border-(--cgv) peer"
               placeholder=" " required />
             <label for="floating_company"
