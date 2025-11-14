@@ -225,7 +225,7 @@ const actualizarEnSupa = async () => {
       numero,
       dni
     })
-    .eq('id', selectedApoderado.value?.id)
+    .eq('id', selectedApoderado.value?.id as number)
     .select('id')
 
   // 🔻 Manejo de error
